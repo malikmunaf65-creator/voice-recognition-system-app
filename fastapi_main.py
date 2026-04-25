@@ -1,17 +1,28 @@
 import os
+import numpy as np
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
-import numpy as np
-import tensorflow as tf
 import plotly.graph_objs as go
-from feature_extractor import extract_mel_spectrogram
 import librosa
 
-# ---------- MODEL ----------
-MODEL_PATH = "models/best_model.h5"
-model = tf.keras.models.load_model(MODEL_PATH)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
+# ---------- TFLITE MODEL ----------
+try:
+    import tflite_runtime.interpreter as tflite
+    interpreter = tflite.Interpreter(model_path="models/best_model.tflite")
+    interpreter.allocate_tensors()
+    input_details  = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+    print("✅ TFLite model loaded")
+    MODEL_OK = True
+except Exception as e:
+    print("❌ TFLite load failed:", e)
+    MODEL_OK = False
+
+from feature_extractor import extract_mel_spectrogram
 
 app = FastAPI()
 
@@ -41,15 +52,22 @@ def get_waveform_plot(audio_path, sr=8000):
     return fig.to_html(full_html=False)
 
 def predict_logic(file_path):
-    x = extract_mel_spectrogram(file_path)
-    x = np.expand_dims(x, axis=0)
-    preds = model.predict(x)[0]
-    top_indices = preds.argsort()[-3:][::-1]
-    top_values = preds[top_indices]
-    top_results = [(int(i), float(v)*100) for i, v in zip(top_indices, top_values)]
-    predicted_class = top_results[0][0]
-    confidence = top_results[0][1]
-    return predicted_class, confidence, top_results
+    try:
+        if not MODEL_OK:
+            return 0, 0.0, [(0, 0.0)]
+        x = extract_mel_spectrogram(file_path)
+        if x is None:
+            return 0, 0.0, [(0, 0.0)]
+        x = np.expand_dims(x, axis=0).astype(np.float32)
+        interpreter.set_tensor(input_details[0]['index'], x)
+        interpreter.invoke()
+        preds = interpreter.get_tensor(output_details[0]['index'])[0]
+        top_indices = preds.argsort()[-3:][::-1]
+        top_results = [(int(i), float(preds[i])*100) for i in top_indices]
+        return top_results[0][0], top_results[0][1], top_results
+    except Exception as e:
+        print("Prediction error:", e)
+        return 0, 0.0, [(0, 0.0)]
 
 def generate_result_html(file_path, filename):
     predicted_class, confidence, top_results = predict_logic(file_path)
