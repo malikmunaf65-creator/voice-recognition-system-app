@@ -3,6 +3,7 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
+import tensorflow as tf
 import numpy as np
 import plotly.graph_objs as go
 from feature_extractor import extract_mel_spectrogram
@@ -10,9 +11,13 @@ import librosa
 
 # ---------- MODEL ----------
 MODEL_PATH = "models/best_model.h5"
-# model = tf.keras.models.load_model("...")
-model = None
 
+try:
+    model = tf.keras.models.load_model(MODEL_PATH)
+    print("✅ Model loaded successfully")
+except Exception as e:
+    print("❌ Model failed to load:", e)
+    model = None
 app = FastAPI()
 
 UPLOAD_DIR = "uploads"
