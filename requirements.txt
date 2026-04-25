@@ -2,7 +2,7 @@ fastapi
 uvicorn
 python-multipart
 jinja2
-tensorflow==2.15.0
+tensorflow-cpu==2.15.0
 numpy==1.23.5
 librosa
 plotly
