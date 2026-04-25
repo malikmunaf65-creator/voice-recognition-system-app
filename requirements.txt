@@ -2,8 +2,8 @@ fastapi
 uvicorn[standard]
 python-multipart
 jinja2
-tensorflow==2.12.0
-numpy==1.23.5
-librosa==0.10.1
+tensorflow-cpu
+numpy
+librosa
 soundfile
 plotly
