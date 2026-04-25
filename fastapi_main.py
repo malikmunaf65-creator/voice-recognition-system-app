@@ -3,28 +3,23 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 import plotly.graph_objs as go
 from feature_extractor import extract_mel_spectrogram
 import librosa
 
 # ---------- MODEL ----------
 MODEL_PATH = "models/best_model.h5"
+model = tf.keras.models.load_model(MODEL_PATH)
 
-try:
-    model = tf.keras.models.load_model(MODEL_PATH)
-    print("✅ Model loaded successfully")
-except Exception as e:
-    print("❌ Model failed to load:", e)
-    model = None
 app = FastAPI()
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-app.mount("/samples", StaticFiles(directory="my_samples"), name="samples")
+app.mount("/samples", StaticFiles(directory="samples"), name="samples")
 
 # ---------- UTILS ----------
 def get_waveform_plot(audio_path, sr=8000):
@@ -46,33 +41,16 @@ def get_waveform_plot(audio_path, sr=8000):
     return fig.to_html(full_html=False)
 
 def predict_logic(file_path):
-    try:
-        if model is None:
-            return 0, 0, [(0, 0)]
+    x = extract_mel_spectrogram(file_path)
+    x = np.expand_dims(x, axis=0)
+    preds = model.predict(x)[0]
+    top_indices = preds.argsort()[-3:][::-1]
+    top_values = preds[top_indices]
+    top_results = [(int(i), float(v)*100) for i, v in zip(top_indices, top_values)]
+    predicted_class = top_results[0][0]
+    confidence = top_results[0][1]
+    return predicted_class, confidence, top_results
 
-        x = extract_mel_spectrogram(file_path)
-
-        if x is None:
-            return 0, 0, [(0, 0)]
-
-        x = np.expand_dims(x, axis=0)
-
-        preds = model.predict(x)[0]
-
-        top_indices = preds.argsort()[-3:][::-1]
-        top_values = preds[top_indices]
-
-        top_results = [(int(i), float(v)*100) for i, v in zip(top_indices, top_values)]
-
-        predicted_class = top_results[0][0]
-        confidence = top_results[0][1]
-
-        return predicted_class, confidence, top_results
-
-    except Exception as e:
-        print("Prediction error:", e)
-        return 0, 0, [(0, 0)]   # 🔥 IMPORTANT
-        
 def generate_result_html(file_path, filename):
     predicted_class, confidence, top_results = predict_logic(file_path)
     top_html = "".join([
@@ -1278,47 +1256,15 @@ def index():
 @app.post("/predict", response_class=HTMLResponse)
 async def predict(file: UploadFile = File(...)):
     file_path = os.path.join(UPLOAD_DIR, file.filename)
-
-    try:
-        # Save uploaded file
-        with open(file_path, "wb") as f:
-            f.write(await file.read())
-
-        # Generate result safely
-        result = generate_result_html(file_path, f"uploads/{file.filename}")
-
-        if result is None:
-            return HTMLResponse("<h2>❌ Processing failed (no output from model)</h2>")
-
-        return result
-
-    except Exception as e:
-        return HTMLResponse(f"<h2>❌ Upload failed: {str(e)}</h2>")
-
+    with open(file_path, "wb") as f:
+        f.write(await file.read())
+    return generate_result_html(file_path, f"uploads/{file.filename}")
 
 @app.get("/sample/{digit}", response_class=HTMLResponse)
 def sample_test(digit: int):
-    file_path = f"my_samples/{digit}.wav"
+    file_path = f"samples/{digit}.wav"
+    return generate_result_html(file_path, f"samples/{digit}.wav")
 
-    # ✅ Check file exists
-    if not os.path.exists(file_path):
-        return HTMLResponse(f"""
-        <h2>❌ Sample not found</h2>
-        <p>File: {digit}.wav</p>
-        <p>Check inside <b>my_samples</b> folder</p>
-        """)
-
-    try:
-        # Generate result safely
-        result = generate_result_html(file_path, f"samples/{digit}.wav")
-
-        if result is None:
-            return HTMLResponse("<h2>❌ Processing failed (model returned None)</h2>")
-
-        return result
-
-    except Exception as e:
-        return HTMLResponse(f"<h2>❌ Error processing sample: {str(e)}</h2>")
 # ---------- RUN ----------
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
