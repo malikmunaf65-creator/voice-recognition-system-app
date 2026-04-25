@@ -1271,15 +1271,34 @@ def index():
 @app.post("/predict", response_class=HTMLResponse)
 async def predict(file: UploadFile = File(...)):
     file_path = os.path.join(UPLOAD_DIR, file.filename)
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
-    return generate_result_html(file_path, f"uploads/{file.filename}")
+
+    try:
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
+
+        return generate_result_html(file_path, f"uploads/{file.filename}")
+
+    except Exception as e:
+        return HTMLResponse(f"<h2>❌ Upload failed: {str(e)}</h2>")
+
 
 @app.get("/sample/{digit}", response_class=HTMLResponse)
 def sample_test(digit: int):
     file_path = f"my_samples/{digit}.wav"
-    return generate_result_html(file_path, f"samples/{digit}.wav")
 
+    # ✅ SAFETY CHECK (prevents Internal Server Error)
+    if not os.path.exists(file_path):
+        return HTMLResponse(f"""
+        <h2>❌ Sample not found</h2>
+        <p>File: {digit}.wav</p>
+        <p>Make sure it exists inside <b>my_samples</b> folder</p>
+        """)
+
+    try:
+        return generate_result_html(file_path, f"samples/{digit}.wav")
+
+    except Exception as e:
+        return HTMLResponse(f"<h2>❌ Error processing sample: {str(e)}</h2>")
 # ---------- RUN ----------
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
