@@ -19,7 +19,7 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-app.mount("/samples", StaticFiles(directory="samples"), name="samples")
+app.mount("/samples", StaticFiles(directory="my_samples"), name="samples")
 
 # ---------- UTILS ----------
 def get_waveform_plot(audio_path, sr=8000):
@@ -1262,7 +1262,7 @@ async def predict(file: UploadFile = File(...)):
 
 @app.get("/sample/{digit}", response_class=HTMLResponse)
 def sample_test(digit: int):
-    file_path = f"samples/{digit}.wav"
+    file_path = f"my_samples/{digit}.wav"
     return generate_result_html(file_path, f"samples/{digit}.wav")
 
 # ---------- RUN ----------
