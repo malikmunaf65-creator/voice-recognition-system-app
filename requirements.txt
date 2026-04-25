@@ -2,7 +2,8 @@ fastapi
 uvicorn
 python-multipart
 jinja2
-tensorflow-cpu==2.15.0
-numpy==1.23.5
+tensorflow-cpu
+numpy==1.26.4
 librosa
 plotly
+soundfile
