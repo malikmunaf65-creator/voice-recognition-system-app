@@ -41,13 +41,15 @@ def get_waveform_plot(audio_path, sr=8000):
     return fig.to_html(full_html=False)
 
 def predict_logic(file_path):
-   def predict_logic(file_path):
     try:
-        # If model is not loaded (Render safe mode)
         if model is None:
             return 0, 0, [(0, 0)]
 
         x = extract_mel_spectrogram(file_path)
+
+        if x is None:
+            return 0, 0, [(0, 0)]
+
         x = np.expand_dims(x, axis=0)
 
         preds = model.predict(x)[0]
@@ -64,8 +66,8 @@ def predict_logic(file_path):
 
     except Exception as e:
         print("Prediction error:", e)
-        return 0, 0, [(0, 0)]
-
+        return 0, 0, [(0, 0)]   # 🔥 IMPORTANT
+        
 def generate_result_html(file_path, filename):
     predicted_class, confidence, top_results = predict_logic(file_path)
     top_html = "".join([
