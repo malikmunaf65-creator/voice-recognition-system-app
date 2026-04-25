@@ -4,14 +4,14 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 import numpy as np
-import tensorflow as tf
 import plotly.graph_objs as go
 from feature_extractor import extract_mel_spectrogram
 import librosa
 
 # ---------- MODEL ----------
 MODEL_PATH = "models/best_model.h5"
-model = tf.keras.models.load_model(MODEL_PATH)
+# model = tf.keras.models.load_model("...")
+model = None
 
 app = FastAPI()
 
@@ -41,15 +41,30 @@ def get_waveform_plot(audio_path, sr=8000):
     return fig.to_html(full_html=False)
 
 def predict_logic(file_path):
-    x = extract_mel_spectrogram(file_path)
-    x = np.expand_dims(x, axis=0)
-    preds = model.predict(x)[0]
-    top_indices = preds.argsort()[-3:][::-1]
-    top_values = preds[top_indices]
-    top_results = [(int(i), float(v)*100) for i, v in zip(top_indices, top_values)]
-    predicted_class = top_results[0][0]
-    confidence = top_results[0][1]
-    return predicted_class, confidence, top_results
+   def predict_logic(file_path):
+    try:
+        # If model is not loaded (Render safe mode)
+        if model is None:
+            return 0, 0, [(0, 0)]
+
+        x = extract_mel_spectrogram(file_path)
+        x = np.expand_dims(x, axis=0)
+
+        preds = model.predict(x)[0]
+
+        top_indices = preds.argsort()[-3:][::-1]
+        top_values = preds[top_indices]
+
+        top_results = [(int(i), float(v)*100) for i, v in zip(top_indices, top_values)]
+
+        predicted_class = top_results[0][0]
+        confidence = top_results[0][1]
+
+        return predicted_class, confidence, top_results
+
+    except Exception as e:
+        print("Prediction error:", e)
+        return 0, 0, [(0, 0)]
 
 def generate_result_html(file_path, filename):
     predicted_class, confidence, top_results = predict_logic(file_path)
